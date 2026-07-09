@@ -134,3 +134,63 @@ An expression cannot read what does not exist. The guarantee is not the evaluato
    allow-list; actions must route through it, not around it.
 4. The compiler must preserve the ordering, and it already fails closed: governed nodes are omitted from compiled
    output entirely, because static output cannot enforce per-viewer gating and must not pretend to.
+
+---
+
+## ADR-004 — The compiler emits expressions as **data**, never as source
+
+**Status:** accepted. Binding on `atomkit-compiler`. Prototype verified.
+
+### Context
+`atomkit-compiler` emits TypeScript source. AQL 1.0 expressions must reach that emitted code. The tempting
+implementation — interpolate the expression's source text into the generated file — turns every legal expression
+into a potential code-injection vector, because a *string literal* may legally contain a backtick, a `${`, a
+`</script>`, or a U+2028.
+
+The evaluator itself is not the problem: `"</script>"` is just a string to an interpreter. The problem is
+downstream, in whatever file the compiler writes.
+
+### Decision
+The compiler parses the expression, validates it into an AST, and emits that **AST as JSON data**, plus a call
+into a runtime interpreter:
+
+```js
+const value = __akEval({"k":"bin","op":">", ...}, scope);
+```
+
+`JSON.stringify` escapes quotes and backslashes. U+2028 and U+2029 are *valid inside JSON strings* but are line
+terminators in ES source, so they are escaped explicitly — the same guard `codegen.ts` already applies to emitted
+text via its `j()` helper.
+
+The compiler never emits a user-supplied string into a position where it can become syntax.
+
+### Evidence
+The same seven hostile expressions — each a perfectly legal AQL expression consisting of one string literal —
+through both strategies:
+
+| Payload | Emit source (naive) | Emit AST (chosen) |
+|---|---|---|
+| `"</script><script>alert(1)</script>"` | contained | ✅ inert value |
+| `` "`);process.exit(1);//" `` | ⚠️ **escapes** | ✅ inert value |
+| `"${process.env.SECRET}"` | ⚠️ **escapes** | ✅ inert value |
+| `"\" + process.env.TOKEN + \""` | contained | ✅ inert value |
+| `"a<U+2028>b"` | ⚠️ **escapes** | ✅ inert value |
+| `"a<U+2029>b"` | ⚠️ **escapes** | ✅ inert value |
+| `"a\\b"` | contained | ✅ inert value |
+
+Naive emission leaks **4 of 7**. AST emission is inert on all seven: each payload round-trips as an exact string
+*value*, never as syntax. U+2028 is escaped in the source and preserved in the value.
+
+And the genuinely dangerous forms — `a.constructor("x")()`, `eval("1")`, `require("fs")` — never reach emission at
+all; the parser rejects them (3/3).
+
+> The test file for this ADR was itself broken twice while being written: once by a raw backtick inside an inline
+> script, once by a raw U+2028 inside a regex. The hazard is not theoretical.
+
+### Consequences
+1. The emitted component needs `__akEval`. It must stay **dependency-free apart from React**, so the interpreter is
+   inlined into the emitted file rather than imported from `@noidmejs/atomkit` — importing core would resurrect the
+   lock-in the compiler exists to prevent. *(Open: `aql-compiler-engineer` to size the inlined interpreter.)*
+2. The AST is pure data, which is also what lets `serialize()` round-trip an expression back to AQL text.
+3. The conformance suite must gain expression cases in the same change that adds expressions to the runtime,
+   because the runtime and the compiler are two implementations of one semantics and have drifted before.
