@@ -5,3 +5,4 @@ dist
 .env
 .env.*
 spike/node_modules
+examples/**/node_modules
