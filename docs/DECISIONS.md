@@ -194,3 +194,49 @@ all; the parser rejects them (3/3).
 2. The AST is pure data, which is also what lets `serialize()` round-trip an expression back to AQL text.
 3. The conformance suite must gain expression cases in the same change that adds expressions to the runtime,
    because the runtime and the compiler are two implementations of one semantics and have drifted before.
+
+---
+
+## ADR-005 — `state` cannot ship without governance, by construction
+
+**Status:** accepted as a constraint. Closes the open item raised in ADR-003 §2.
+
+### The question
+`stripDocument` masks `props`. The moment a document can declare `state { email = "ada@corp.com" }`, state becomes
+a second channel for the same data. Does the AQL 1.0 state feature open a governance hole?
+
+### The finding
+No — and the reason is a property of the schema, not a promise from a designer.
+
+Since `@noidmejs/atomkit@0.7.0`, **every object in the document is strict**: `parseDocument` rejects unknown keys
+at every level. So a `state` field cannot be smuggled in:
+
+```
+{ id:"a", type:"text", state:{ email:"..." } }
+→ ZodError: unrecognized_keys: ["state"]
+```
+
+State can only exist by a deliberate change to `nodeSchema`/`documentSchema`. And by the CTO's standing ruling —
+*the schema is a trust boundary* — that change must be accompanied, in the same commit, by the `stripDocument`
+handling for it. The strictness makes the omission impossible to make by accident.
+
+Separately, `props` is a permissive record by design (atoms own their prop contract). A nested object hidden there
+is already handled: `maskNode` is deny-by-default and **drops every structured value** on a governed node.
+
+```
+node with pii, props { text:"x", state:{ email:"ada@corp.com" } }
+→ after stripDocument: { "text":"•••••" }          ← the object is gone, not masked
+```
+
+### The remaining hazard, and the rule
+A **page-level** `state` block belongs to no node, so no node's `meta.security` governs it. It is therefore
+**public by construction**: it ships to the browser and appears in the compiled output.
+
+The rule, binding on `aql-language-designer` and `aql-runtime-engineer`:
+
+1. Page-level state is **public**. It must never be initialised from a governed value.
+2. A governed node's bound value must never flow *into* state. Data binding resolves after `stripDocument`, so a
+   `pii` node's value is already the mask by the time any action could capture it — but this must be asserted by a
+   test, not assumed.
+3. `lint()` gains a rule: warn when a `pii`/`protected`/`roles`-gated node writes to state.
+4. If node-scoped state is ever introduced, `maskNode` masks it exactly as it masks props.
