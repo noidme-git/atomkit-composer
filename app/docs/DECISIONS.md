@@ -563,3 +563,40 @@ the compiler, in one change, with the conformance suite extended. That is the CT
 `spike/gate-ratchet.mjs` is what CI runs. It refused to let this change land silently: it flagged G2 closing, three
 new gates, and one deleted gate, and demanded each be written down. That is the ratchet working, and it is why
 this ADR exists.
+
+---
+
+## ADR-011 — Build it, look at it. The UI shipped broken because it was never seen.
+
+**Status:** accepted. A process fix, forced by a real failure.
+
+### What happened
+The composer was "verified" by grepping the built HTML for strings — "does it contain `Join Northwind Health`?
+does it contain `LAYERS`?" — and reported as working. It was not. The rendered page had an **empty canvas** and the
+**entire right-hand Layers + Inspector panel was off-screen**. Every string the check looked for was present in the
+DOM; the *layout* was broken, and a string check cannot see layout.
+
+This is the exact failure this project has criticised from the start — a test that asserts presence, not truth —
+committed against our own product. It shipped because there was no way to see the page in this environment, and
+that gap was papered over with string matching instead of being named.
+
+### Root causes, both real
+1. **No visual verification.** Fixed: the toolchain now has a `shot` verb (`atomkit-release/scripts/app.sh shot
+   <app>`) that renders the built page with real Chrome (its built-in headless screenshot, zero dependencies) and
+   saves a PNG. A human — or an agent — looks at the actual page. "See it with the test kit."
+2. **atomkit's style vocabulary cannot express an app shell.** Building the composer surfaced three genuine gaps,
+   each found by *using* the product, not reviewing it:
+   - **No `flex-grow` / `flex`.** `grow=1` and `flex=1` resolve to ignored props. A sidebar/content/sidebar layout
+     is impossible with flex. Worked around with CSS grid (`grid-cols="248px minmax(0,1fr) 340px"`), which is the
+     correct tool anyway — but the gap is real and app layouts need it.
+   - **No per-side border** (`border-left`/`border-right`/`border-top`/`border-bottom`). They resolve to nothing.
+   - **`divider` (`<hr>`) collapses to a dot inside a flex column.** Worked around with a 1px box.
+
+### The rule
+A milestone that produces UI is not done until someone has **looked at the rendered page**. `scripts/app.sh shot`
+makes that a one-command step; there is no longer an excuse to ship a layout no one has seen.
+
+### The core work this generates (tracked, not yet done)
+Add to atomkit's style vocabulary: `flex` / `flex-grow` / `flex-shrink` / `flex-basis`, `align-self`, and
+per-side borders. Fix the `divider` atom to render a full-width rule inside a flex column. Each ships in runtime
+and compiler together, with the conformance suite extended.

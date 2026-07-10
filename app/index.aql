@@ -1,178 +1,185 @@
-// The atomkit composer.
+// The atomkit composer — authored entirely in AQL.
 //
-// Authored entirely in AQL. No .js, no .ts, no .css in this project — the compiler
-// transforms. Every visual below is an atom from @noidmejs/atomkit; the styling is
-// declarative props and design tokens from atomkit.config.json.
-//
-// WHAT IS LIVE TODAY: the shell, the canvas (rendering real atoms), the governance
-// preview, the palette, the layers tree, the inspector.
-// WHAT IS NOT: clicking, selecting, editing, dragging. Those need AQL's expression
-// and state layer, which is gated on G2w/G5w — see docs/DECISIONS.md ADR-010.
-// The gate is red. Nothing interactive ships until it is green.
+// Layout is CSS grid, not flex: atomkit's style vocabulary has no flex-grow, so a
+// sidebar/content/sidebar shell cannot be built with flex today. `grid-cols` with
+// `minmax(0,1fr)` gives fixed rails and a fluid centre that never overflows.
 
 page "atomkit composer" desc="Compose governed UI in AQL. Download a project you own." {
 
-  // ── Top bar ───────────────────────────────────────────────────────────────
-  box as=header bg="var(--ink)" pad-y=14 pad-x=24 {
-    row justify=space-between items=center {
-      row items=center gap=12 {
-        icon path="M4 4h16v16H4z M4 10h16 M10 4v16" size=20 stroke="#ffffff" aria-label="atomkit"
-        heading "atomkit composer" level=1 size=17px weight=700 color="#ffffff"
-        chip "v0.1 · shell" bg="#1e2a3d" color="#9fb3d1" size=11px
+  // ── Top bar ─────────────────────────────────────────────────────────────
+  box as=header bg="var(--ink)" pad="0 20px" h=56 {
+    box display=grid grid-cols="1fr auto" items=center h=56 {
+      row items=center gap=10 {
+        heading "atomkit" level=1 size=16px weight=800 color="#ffffff"
+        text "composer" size=16px weight=400 color="#8aa0c2"
+        chip "shell preview" bg="#1b2740" color="#7f97bd" size=11px weight=600 radius=999px pad="3px 10px"
       }
-      row items=center gap=8 {
-        text "Viewing as" color="#9fb3d1" size=13px
-        chip "Anonymous" bg="#2f6feb" color="#ffffff" size=12px weight=700
-        chip "Recruiter" bg="#1e2a3d" color="#9fb3d1" size=12px
-        chip "Admin" bg="#1e2a3d" color="#9fb3d1" size=12px
-        divider
-        button "Download project" href="#download" bg="#ffffff" color="var(--ink)" size=13px weight=700 radius=6 pad="8px 14px"
+      row items=center gap=10 {
+        text "Preview as" color="#7f97bd" size=13px
+        chip "Anonymous" bg="var(--brand)" color="#ffffff" size=12px weight=700 radius=6 pad="6px 12px"
+        chip "Recruiter" bg="#1b2740" color="#9fb3d6" size=12px weight=600 radius=6 pad="6px 12px"
+        chip "Admin" bg="#1b2740" color="#9fb3d6" size=12px weight=600 radius=6 pad="6px 12px"
+        button "Download project" href="#download" bg="#ffffff" color="var(--ink)" size=13px weight=700 radius=6 pad="7px 14px"
       }
     }
   }
 
-  // ── Three-pane workspace ──────────────────────────────────────────────────
-  section contain=false pad-y=0 bg="var(--panel)" {
-    row wrap=false items=stretch gap=0 min-h="calc(100vh - 56px)" {
+  // ── Workspace: palette · canvas · inspector ─────────────────────────────
+  box display=grid grid-cols="248px minmax(0,1fr) 340px" min-h="calc(100vh - 56px)" bg="#e9edf2" {
 
-      // ── Palette ────────────────────────────────────────────────────────
-      box w=228 bg="#ffffff" border-right="1px solid var(--line)" pad=16 {
-        stack gap=14 {
-          text "PALETTE" size=11px weight=700 color="var(--muted)" ls="0.08em"
+    // Palette
+    box bg="#ffffff" pad=18 overflow=auto {
+      stack gap=18 {
+        text "PALETTE" size=11px weight=800 color="var(--muted)" ls="0.09em"
 
+        stack gap=10 {
           text "Layout" size=12px weight=700 color="var(--ink)"
           grid cols=2 gap=8 {
-            chip "section" bg="var(--panel)" color="var(--ink)" size=12px radius=6
-            chip "container" bg="var(--panel)" color="var(--ink)" size=12px radius=6
-            chip "grid" bg="var(--panel)" color="var(--ink)" size=12px radius=6
-            chip "row" bg="var(--panel)" color="var(--ink)" size=12px radius=6
-            chip "stack" bg="var(--panel)" color="var(--ink)" size=12px radius=6
-            chip "box" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "section" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
+            chip "container" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
+            chip "grid" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
+            chip "row" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
+            chip "stack" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
+            chip "box" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
           }
+        }
 
+        stack gap=10 {
           text "Content" size=12px weight=700 color="var(--ink)"
           grid cols=2 gap=8 {
-            chip "heading" bg="var(--panel)" color="var(--ink)" size=12px radius=6
-            chip "text" bg="var(--panel)" color="var(--ink)" size=12px radius=6
-            chip "link" bg="var(--panel)" color="var(--ink)" size=12px radius=6
-            chip "button" bg="var(--panel)" color="var(--ink)" size=12px radius=6
-            chip "list" bg="var(--panel)" color="var(--ink)" size=12px radius=6
-            chip "icon" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "heading" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
+            chip "text" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
+            chip "link" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
+            chip "button" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
+            chip "list" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
+            chip "icon" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
           }
+        }
 
+        stack gap=10 {
           text "Media" size=12px weight=700 color="var(--ink)"
           grid cols=2 gap=8 {
-            chip "image" bg="var(--panel)" color="var(--ink)" size=12px radius=6
-            chip "video" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "image" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
+            chip "video" bg="var(--panel)" color="var(--ink)" size=12px weight=600 radius=7 pad="8px 10px" border="1px solid var(--line)"
           }
+        }
 
-          divider
-          box bg="#fffbeb" border="1px solid #fde68a" radius=6 pad=10 {
-            text "Click-to-place is disabled." size=11px weight=700 color="var(--warn)"
-            text "Needs AQL's expression + state layer. Gate G2w is open." size=11px color="var(--warn)"
+        box bg="#fffbeb" border="1px solid #fcd34d" radius=8 pad=12 {
+          stack gap=4 {
+            text "Click-to-place is off" size=12px weight=700 color="var(--warn)"
+            text "Needs AQL's expression + state layer. Gate G2w is open." size=11px color="#92660a" lh=1.5
           }
         }
       }
+    }
 
-      // ── Canvas ─────────────────────────────────────────────────────────
-      box bg="var(--panel)" pad=24 w="100%" {
-        stack gap=12 {
-          row justify=space-between items=center {
-            text "CANVAS · careers.aql" size=11px weight=700 color="var(--muted)" ls="0.08em"
-            text "rendered by the same renderer that ships" size=11px color="var(--muted)"
+    // Canvas
+    box bg="#e9edf2" pad=28 overflow=auto {
+      stack gap=14 {
+        row justify=space-between items=center {
+          row items=center gap=8 {
+            text "CANVAS" size=11px weight=800 color="var(--muted)" ls="0.09em"
+            text "careers.aql" size=12px weight=600 color="var(--ink)"
           }
+          text "the same renderer that ships this page" size=11px color="var(--muted)"
+        }
 
-          // The canvas is not a mock. These are the real atoms, rendered by the
-          // real renderer, through the real egress path.
-          box bg="#ffffff" border="1px solid var(--line)" radius=10 pad=32 shadow="0 1px 2px rgba(11,18,32,.04)" {
-            stack gap=18 {
-              heading "Join Northwind Health" level=2 size=30px color="var(--ink)"
-              text "We build software for hospitals. Come help." color="var(--muted)" size=16px max-w=52ch
+        // The canvas is not a mock: real atoms, real renderer, real egress path.
+        container width=760px {
+          box bg="#ffffff" border="1px solid var(--line)" radius=12 pad=40 shadow="0 1px 3px rgba(11,18,32,0.06)" {
+            stack gap=20 {
+              heading "Join Northwind Health" level=2 size=32px weight=800 color="var(--ink)" lh=1.15
+              text "We build software for hospitals. Come help." color="var(--muted)" size=17px lh=1.6 max-w=54ch
 
-              divider
+              box h=1 bg="var(--line)"
 
-              text "Compensation band" size=12px weight=700 color="var(--muted)"
-              row items=center gap=10 {
-                text "£120,000 – £160,000" weight=700 color="var(--ink)"
-                chip "visible to recruiter" bg="#eef2ff" color="#3730a3" size=11px
+              stack gap=8 {
+                text "COMPENSATION" size=11px weight=800 color="var(--muted)" ls="0.08em"
+                row items=center gap=10 wrap=true {
+                  text "£120,000 – £160,000" size=18px weight=700 color="var(--ink)"
+                  chip "visible to recruiter" bg="#eef2ff" color="#3730a3" size=11px weight=600 radius=999px pad="4px 10px"
+                }
               }
 
-              text "Talk to a human" size=12px weight=700 color="var(--muted)"
-              row items=center gap=10 {
-                text "•••••" color="var(--ink)"
-                chip "contains personal data" bg="#fef2f2" color="#991b1b" size=11px
+              stack gap=8 {
+                text "CONTACT" size=11px weight=800 color="var(--muted)" ls="0.08em"
+                row items=center gap=10 wrap=true {
+                  text "•••••" size=16px weight=600 color="var(--ink)"
+                  chip "contains personal data" bg="#fef2f2" color="#991b1b" size=11px weight=600 radius=999px pad="4px 10px"
+                }
               }
 
-              row items=center gap=10 {
-                text "Hiring plan Q3" color="var(--muted)"
-                chip "is confidential" bg="#f5f3ff" color="#5b21b6" size=11px
+              stack gap=8 {
+                row items=center gap=10 wrap=true {
+                  text "Hiring plan Q3" color="var(--muted)" size=15px
+                  chip "confidential" bg="#f5f3ff" color="#5b21b6" size=11px weight=600 radius=999px pad="4px 10px"
+                }
               }
             }
           }
+        }
 
-          box bg="#ffffff" border="1px solid var(--line)" radius=8 pad=12 {
-            text "You are previewing as Anonymous. Two nodes are absent from this page, not hidden — the bytes were never sent." size=12px color="var(--muted)"
+        container width=760px {
+          box bg="#eef2ff" border="1px solid #c7d2fe" radius=10 pad="12px 16px" {
+            text "Previewing as Anonymous. Two nodes are absent from this page — not hidden, not blurred. The bytes were never sent." size=12px color="#3730a3" lh=1.6
           }
         }
       }
+    }
 
-      // ── Inspector + layers ─────────────────────────────────────────────
-      box w=280 bg="#ffffff" border-left="1px solid var(--line)" pad=16 {
-        stack gap=16 {
-          text "LAYERS" size=11px weight=700 color="var(--muted)" ls="0.08em"
-          list {
-            text "section" size=13px color="var(--ink)"
-            text "heading — Join Northwind Health" size=13px color="var(--muted)"
-            text "text — We build software…" size=13px color="var(--muted)"
-            text "section · roles=recruiter" size=13px color="#3730a3"
-            text "section · pii" size=13px color="#991b1b"
-            text "section · protected" size=13px color="#5b21b6"
+    // Inspector
+    box bg="#ffffff" pad=18 overflow=auto {
+      stack gap=18 {
+
+        stack gap=10 {
+          text "LAYERS" size=11px weight=800 color="var(--muted)" ls="0.09em"
+          stack gap=4 {
+            box bg="var(--panel)" radius=6 pad="7px 10px" { text "section" size=13px weight=600 color="var(--ink)" }
+            box radius=6 pad="7px 10px 7px 22px" { text "heading · Join Northwind Health" size=13px color="var(--muted)" }
+            box radius=6 pad="7px 10px 7px 22px" { text "text · We build software…" size=13px color="var(--muted)" }
+            box bg="#eef2ff" radius=6 pad="7px 10px 7px 22px" { text "section · roles=recruiter" size=13px weight=600 color="#3730a3" }
+            box bg="#fef2f2" radius=6 pad="7px 10px 7px 22px" { text "text · pii" size=13px weight=600 color="#991b1b" }
+            box bg="#f5f3ff" radius=6 pad="7px 10px 7px 22px" { text "section · protected" size=13px weight=600 color="#5b21b6" }
           }
+        }
 
-          divider
+        box h=1 bg="var(--line)"
 
-          text "INSPECTOR" size=11px weight=700 color="var(--muted)" ls="0.08em"
-          text "heading" size=13px weight=700 color="var(--ink)"
+        stack gap=12 {
+          row justify=space-between items=center {
+            text "INSPECTOR" size=11px weight=800 color="var(--muted)" ls="0.09em"
+            chip "heading" bg="var(--ink)" color="#ffffff" size=11px weight=700 radius=6 pad="3px 9px"
+          }
 
           stack gap=6 {
             text "Content" size=11px weight=700 color="var(--muted)"
-            box bg="var(--panel)" border="1px solid var(--line)" radius=6 pad="8px 10px" {
-              text "Join Northwind Health" size=13px color="var(--ink)"
-            }
+            box bg="var(--panel)" border="1px solid var(--line)" radius=7 pad="9px 11px" { text "Join Northwind Health" size=13px color="var(--ink)" }
           }
           stack gap=6 {
             text "Level" size=11px weight=700 color="var(--muted)"
-            box bg="var(--panel)" border="1px solid var(--line)" radius=6 pad="8px 10px" {
-              text "2" size=13px color="var(--ink)"
-            }
+            box bg="var(--panel)" border="1px solid var(--line)" radius=7 pad="9px 11px" { text "2" size=13px color="var(--ink)" }
+          }
+          stack gap=6 {
+            text "Size" size=11px weight=700 color="var(--muted)"
+            box bg="var(--panel)" border="1px solid var(--line)" radius=7 pad="9px 11px" { text "32px" size=13px color="var(--ink)" }
           }
           stack gap=6 {
             text "Governance" size=11px weight=700 color="var(--muted)"
             row gap=6 wrap=true {
-              chip "public" bg="var(--panel)" color="var(--muted)" size=11px
-              chip "pii" bg="var(--panel)" color="var(--muted)" size=11px
-              chip "protected" bg="var(--panel)" color="var(--muted)" size=11px
-              chip "roles" bg="var(--panel)" color="var(--muted)" size=11px
+              chip "public" bg="var(--ink)" color="#ffffff" size=11px weight=600 radius=6 pad="4px 10px"
+              chip "pii" bg="var(--panel)" color="var(--muted)" size=11px radius=6 pad="4px 10px" border="1px solid var(--line)"
+              chip "protected" bg="var(--panel)" color="var(--muted)" size=11px radius=6 pad="4px 10px" border="1px solid var(--line)"
+              chip "roles" bg="var(--panel)" color="var(--muted)" size=11px radius=6 pad="4px 10px" border="1px solid var(--line)"
             }
           }
 
-          divider
-          box bg="#fffbeb" border="1px solid #fde68a" radius=6 pad=10 {
-            text "Fields are read-only." size=11px weight=700 color="var(--warn)"
-            text "Editing needs input atoms and an action model. Deferred until gate G5w closes." size=11px color="var(--warn)"
+          box bg="#fffbeb" border="1px solid #fcd34d" radius=8 pad=12 {
+            stack gap=4 {
+              text "Fields are read-only" size=12px weight=700 color="var(--warn)"
+              text "Editing needs input atoms + an action model. Deferred until gate G5w closes." size=11px color="#92660a" lh=1.5
+            }
           }
         }
-      }
-    }
-  }
-
-  // ── Footer ────────────────────────────────────────────────────────────────
-  box as=footer bg="#ffffff" border-top="1px solid var(--line)" pad="14px 24px" {
-    row justify=space-between items=center {
-      text "Authored in AQL. No .js, no .ts, no .css in this project." size=12px color="var(--muted)"
-      row gap=16 {
-        link "Decisions" href="https://github.com/noidme-git/atomkit-composer/blob/main/docs/DECISIONS.md" external size=12px color="var(--brand)"
-        link "Governance gate" href="https://github.com/noidme-git/atomkit-composer/blob/main/spike/governance-gate.mjs" external size=12px color="var(--brand)"
       }
     }
   }
