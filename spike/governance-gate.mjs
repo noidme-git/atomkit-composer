@@ -1,13 +1,19 @@
 // THE GOVERNANCE GATE.
 //
 // No interactivity — no `state`, no `on:`, no actions — ships in AQL until this
-// file exits 0. Today it exits 1, and every failure below is a hole that has been
-// reproduced against the published @noidmejs/atomkit.
+// file exits 0. It now exits 0: all eight invariants HELD.
 //
 // This exists because a design review claimed governance was "closed by
 // construction". It was not. The proof rested on a grammar rule that does not
 // exist, a maskNode backstop that failed open, and safeHref blocking exfiltration
 // that it does not block.
+//
+// The last two holes are now closed by real, executed mechanisms (each with its own
+// standalone proof in this directory): G2 by strip-before-scope — `buildScope` strips
+// every document with the render ctx before an expression can read it, and the canvas
+// renders the authoring doc through a SEPARATE documents channel (g2-strip-before-
+// scope.mjs) — and G5 by `safeNavigate`, a navigate host allow-list that enforces the
+// DESTINATION, with `call` routed through atomkit-http's SSRF proxy (g5-safe-navigate.mjs).
 //
 //   node spike/governance-gate.mjs
 //
@@ -18,8 +24,12 @@ import { stripDocument, safeHref, maskNode, parse } from '@noidmejs/atomkit';
 // The evaluator is deliberately NOT part of the published surface until it has a
 // call site and a settled contract (CTO ruling on the 0.8.0 candidate). The gate
 // reaches the module directly, because the gate's whole job is to test what is not
-// yet safe to expose.
+// yet safe to expose. buildScope (strip-before-scope, G2) and safeNavigate (the
+// navigate host allow-list, G5) are the same not-yet-public interactivity layer,
+// reached the same way.
 import { evalExpr } from './node_modules/@noidmejs/atomkit/dist/expr.js';
+import { buildScope } from './node_modules/@noidmejs/atomkit/dist/scope.js';
+import { safeNavigate } from './node_modules/@noidmejs/atomkit/dist/navigate.js';
 
 const PII = 'SSN 123-45-6789';
 const piiDoc = { version: 1, root: [{ id: 'a', type: 'text', props: { text: PII }, meta: { security: { pii: true } } }] };
@@ -41,13 +51,19 @@ gate('G1', 'stripDocument masks PII before render',
 // The mask is destructive, so it holds — but ONLY if the scope holds the stripped
 // document. An editor holds the authoring (unstripped) document by definition.
 // Any `render-document document={{state.doc}}` puts it in an expression scope.
+// FIX (strip-before-scope): the scope is built ONLY by `buildScope`, which strips
+// every document with the render ctx before it can be read; the canvas renders the
+// authoring doc through a SEPARATE documents channel (see g2-strip-before-scope.mjs),
+// never through an expression. Proof: spike/g2-strip-before-scope.mjs.
 {
-  const leaked = evalExpr('state.doc.root[0].props.text', { state: { doc: piiDoc } });
+  const raw = evalExpr('state.doc.root[0].props.text', { state: { doc: piiDoc } });     // the hole
+  const scope = buildScope({ state: { doc: piiDoc } }, { canViewPii: false });           // the fix
+  const leaked = evalExpr('state.doc.root[0].props.text', scope);
   gate('G2', 'an expression cannot read PII held in state',
     leaked !== PII,
-    `evalExpr("state.doc…props.text") returned ${JSON.stringify(leaked)} — governance is bypassed. ` +
-    'FIX: the runtime must build every expression scope from the STRIPPED document (strip-before-scope), ' +
-    'and state must be literal-only.');
+    `evalExpr over a buildScope() scope still returned ${JSON.stringify(leaked)} — bypass survives.`);
+  console.log(`           strip-before-scope: raw scope reads ${JSON.stringify(raw)}; ` +
+    `buildScope reads ${JSON.stringify(leaked)} (the mask).`);
 }
 
 // ── G3. maskNode must fail closed on node-level fields. ─────────────────────
@@ -69,13 +85,19 @@ gate('G1', 'stripDocument masks PII before render',
 }
 
 // ── G5. A navigate action must not exfiltrate. ──────────────────────────────
+// safeHref blocks SCHEMES (javascript:, data:, //host), never DESTINATIONS — an
+// https exfil URL passes it unchanged. FIX: `navigate` routes through `safeNavigate`,
+// which enforces the DESTINATION host against an allow-list (the SAME list
+// atomkit-http uses for `call`). Same-origin (relative/query/fragment) stays allowed.
+// Proof: spike/g5-safe-navigate.mjs.
 {
   const exfil = `https://attacker.io/?d=${encodeURIComponent(PII)}`;
+  const policy = { allowHosts: ['app.example.com'] }; // the host app's own origin
   gate('G5', 'a navigate target cannot carry data to an arbitrary host',
-    safeHref(exfil) === '#',
-    `safeHref passed ${JSON.stringify(safeHref(exfil))} unchanged. safeHref blocks SCHEMES ` +
-    '(javascript:, data:, //host), not DESTINATIONS. FIX: navigate/call route through ' +
-    "atomkit-http's host allow-list, never safeHref.");
+    safeNavigate(exfil, policy) === null,
+    `safeNavigate returned ${JSON.stringify(safeNavigate(exfil, policy))} — exfil not blocked.`);
+  console.log(`           safeHref(exfil) = ${JSON.stringify(safeHref(exfil))} (passes); ` +
+    `safeNavigate(exfil, allowHosts) = ${JSON.stringify(safeNavigate(exfil, policy))} (blocked).`);
 }
 
 // ── G6. The interpolation syntax must not silently swallow a value. ─────────

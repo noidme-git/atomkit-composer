@@ -413,3 +413,79 @@ For a full governed page written both ways:
    success rates directly. Owned by `aql-ai-engineer`. A claim of "AI friendly" without a number is marketing.
 5. The cautionary tale is AppleScript: *reads like English* degenerated into *unguessable which English works*.
    Every phrase must lower to exactly one canonical form, and the error message must name the nearest valid phrase.
+
+---
+
+## ADR-009 — A governed page ejects as one artifact **per persona**
+
+**Status:** proposed. Prototype verified (`spike/persona-eject.mjs`, 13/13). Closes the ADR-007 gap.
+
+### The problem
+ADR-007 recorded the price of the owner's mandate: MXML died as a proprietary language with no exit, so **every AQL
+page must eject to standalone React the customer owns.** But a *governed* page ejects **incomplete** — the compiler
+drops every node declaring `pii`, `protected`, `roles` or `consent`:
+
+```js
+// atomkit-compiler/src/index.ts
+function isGoverned(n) { const s = n.meta?.security;
+  return !!(n.hidden || s?.protected || (s?.roles?.length) || s?.pii || s?.consentCategory); }
+```
+
+That is *correct*: one static artifact cannot enforce per-viewer gating and must not pretend to. But it means
+*governed by construction* and *portable by default* do not both hold — and a recruiter cannot eject **their** page
+at all.
+
+### The wrong fix, recorded so it is never attempted
+Emit one component taking a `context` prop, gating at render time. That ships every viewer's content to every
+viewer's browser and hides it behind a conditional. Governance would become a `display:none`-grade lie. atomkit
+exists to refuse exactly this.
+
+### The decision
+Nothing says there must be **one** artifact. Eject **one bundle per persona**, each compiled from a document
+already stripped for that persona:
+
+```
+stripDocument(doc, persona.ctx)  →  clear meta.security  →  compileDocumentToReact
+```
+
+Governance survives because it was enforced **before** compilation. Portability survives because each file is plain
+React with no runtime dependency. The bytes another viewer would see are **not in the file**. Not hidden. Absent.
+
+### Evidence (`spike/persona-eject.mjs`, against published 0.8.0 / 0.5.0)
+
+| bundle | bytes | contains |
+|---|---|---|
+| `Careers_public` | 2395 | the job ad, and `•••••` where the email was |
+| `Careers_recruiter` | 2959 | + the salary band |
+| `Careers_admin` | 3979 | + the recruiter email, + the board hiring plan |
+
+```
+✅ public bundle does NOT contain the salary band / email / board plan
+✅ recruiter bundle DOES contain the salary band, and NOT the PII
+✅ admin bundle contains both
+✅ every bundle is standalone React — no @noidmejs import
+✅ no bundle carries a governance declaration to gate on at runtime
+```
+
+### The hazard this creates, and the rule
+A per-persona bundle **must never be written into the deployable output.** `Careers_admin.tsx` inside `dist/` is a
+public URL containing PII.
+
+This was already half-true: `build` wrote `dist/components/*.tsx`, and `start` served everything under `dist/` with
+an `octet-stream` fallback, so `GET /components/Home.tsx` returned 200 and your source. Harmless while the compiler
+dropped all governed nodes; a catastrophe the moment it stops.
+
+**Fixed first** (`atomkit-app@next`): `components/` and any `.ts` / `.tsx` / `.map` are never served, proven by a
+two-sided test over real HTTP — it asserts the artifacts are unreachable *and* that the site still is, because a
+test that only looks for 404s passes against a server that 404s everything.
+
+**The rule for persona bundles:** they are emitted **outside** `outDir`, never into it, and the CLI must refuse to
+write a governed bundle anywhere the static server can reach. Governance that depends on remembering not to deploy
+a file is not governance.
+
+### Open
+- Personas must be **enumerable at build time**. A role set computed at runtime cannot be pre-compiled. Scope the
+  promise: eject is for a *known* set of viewer classes, not for arbitrary per-user gating.
+- Bundle count multiplies with personas. State the cost.
+- Who chooses which bundle to serve? That is the host's authorization layer, and it must be named in the docs, not
+  assumed.
