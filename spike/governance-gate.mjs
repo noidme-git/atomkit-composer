@@ -28,8 +28,9 @@ import { stripDocument, safeHref, maskNode, parse } from '@noidmejs/atomkit';
 // navigate host allow-list, G5) are the same not-yet-public interactivity layer,
 // reached the same way.
 import { evalExpr } from './node_modules/@noidmejs/atomkit/dist/expr.js';
-import { buildScope } from './node_modules/@noidmejs/atomkit/dist/scope.js';
+import { buildScope, evalInScope, isScope } from './node_modules/@noidmejs/atomkit/dist/scope.js';
 import { safeNavigate } from './node_modules/@noidmejs/atomkit/dist/navigate.js';
+import { readFileSync, existsSync } from 'node:fs';
 
 const PII = 'SSN 123-45-6789';
 const piiDoc = { version: 1, root: [{ id: 'a', type: 'text', props: { text: PII }, meta: { security: { pii: true } } }] };
@@ -52,24 +53,35 @@ gate('G1', 'stripDocument masks PII before render',
   'the mask itself is broken');
 
 // ── G2. An expression must not read a masked value through STATE. ────────────
-// The mask is destructive, so it holds — but ONLY if the scope holds the stripped
-// document. An editor holds the AUTHORING document by definition.
+// An editor holds the UNSTRIPPED authoring document by definition. The moment it
+// lands in an expression scope, an expression reads straight around the mask.
 //
-// G2 asks about the SYSTEM: can a renderer construct a raw scope and read PII?
-// Today: yes, because nothing forces it through buildScope. `buildScope` exists and
-// is sound (G2p), but a primitive with no call site is a library, not an invariant.
-// See spike/gate-wiring.mjs. This stays OPEN until the runtime cannot bypass it.
+// The rule "no call site may hand a raw object to the evaluator" used to be a
+// sentence in a comment. A comment is not an enforcement: a renderer that forgets is
+// prevented from nothing. `buildScope` now BRANDS its result with a symbol, and
+// `evalInScope` — the one sanctioned entry — refuses anything unbranded, failing
+// closed to `undefined`.
 {
-  const raw = evalExpr('state.doc.root[0].props.text', { state: { doc: piiDoc } });
-  gate('G2', 'the system cannot construct a scope that reads PII',
-    raw !== PII,
-    `evalExpr over a hand-built scope returned ${JSON.stringify(raw)}. ` +
-    'buildScope() would have masked it, but nothing forces the renderer to use it. ' +
-    'FIX: the runtime must build EVERY expression scope via buildScope, and `state` must be literal-only.');
+  const raw = { state: { doc: piiDoc } };                              // what an editor holds
+  const safe = buildScope(raw, { canViewPii: false });                 // stripped + branded
 
-  // G2p — is the primitive itself sound? Probe the shape classes, not one input.
-  // `buildScope` originally masked only `{version:number, root:array}`, so a SELECTED
-  // NODE — what an inspector holds — read raw PII. Found by the CTO gate.
+  const viaRaw = evalInScope('state.doc.root[0].props.text', raw);
+  const viaSafe = evalInScope('state.doc.root[0].props.text', safe);
+
+  gate('G2', 'the sanctioned expression entry refuses an unstripped scope',
+    viaRaw === undefined && viaSafe === '•••••',
+    `evalInScope(raw) → ${JSON.stringify(viaRaw)} (want undefined); evalInScope(safe) → ${JSON.stringify(viaSafe)} (want the mask)`);
+
+  // The brand must be unforgeable from a document, which is JSON: JSON cannot name a
+  // symbol key. And it is non-enumerable, so a spread silently loses it — fail closed.
+  const forged = JSON.parse('{"state":{},"Symbol(atomkit.scope)":true,"@@atomkit.scope":true}');
+  gate('G2b', 'the scope brand cannot be forged by a JSON document, nor survive a spread',
+    !isScope(forged) && !isScope({ ...safe }) && evalInScope('state.doc', { ...safe }) === undefined,
+    'a forged or spread scope was accepted');
+
+  // G2p — is the primitive sound across SHAPES, not one input? `buildScope` originally
+  // masked only `{version:number, root:array}`, so a SELECTED NODE — what an inspector
+  // holds — read raw PII. Found by the CTO gate.
   const piiNode = piiDoc.root[0];
   const shapes = [
     ['document', { state: { doc: piiDoc } }],
@@ -81,8 +93,7 @@ gate('G1', 'stripDocument masks PII before render',
   ];
   const leaky = shapes.filter(([, sc]) => JSON.stringify(buildScope(sc, { canViewPii: false })).includes(PII)).map(([n]) => n);
   gate('G2p', 'buildScope() masks every governed shape, not just a document',
-    leaky.length === 0,
-    `leaks for: ${leaky.join(', ')}`);
+    leaky.length === 0, `leaks for: ${leaky.join(', ')}`);
 }
 
 // ── G3. maskNode must fail closed on node-level fields. ─────────────────────
@@ -104,34 +115,50 @@ gate('G1', 'stripDocument masks PII before render',
 }
 
 // ── G5. A navigate action must not exfiltrate. ──────────────────────────────
-// safeHref blocks SCHEMES (javascript:, data:, //host), never DESTINATIONS.
-//
-// G5 asks about the SYSTEM: is the default URL guard sufficient? No. `safeNavigate`
-// exists and is sound (G5p), but no atom, renderer or action calls it. OPEN.
+// `safeHref` blocks SCHEMES (javascript:, data:, //host), never DESTINATIONS. It is
+// the right guard for an AUTHORED href — a link the reader clicks, carrying no state.
+// It is the wrong guard for a `navigate(expr)` action, which can carry state to any
+// host. `safeNavigate` is that guard.
 {
-  const exfil = `https://attacker.io/?d=${encodeURIComponent(PII)}`;
-  gate('G5', 'the system cannot navigate data to an arbitrary host',
-    safeHref(exfil) === '#',
-    `safeHref passed ${JSON.stringify(safeHref(exfil))} unchanged — it blocks schemes, not destinations. ` +
-    'safeNavigate() would block it, but nothing calls it. FIX: route every navigate/call through it.');
-
-  // G5p — is the primitive sound? Probe the bypass CLASSES.
-  // It originally prefix-matched the raw string, so `/<TAB>/evil.com/steal` looked
-  // same-origin while a browser resolves it to https://evil.com/steal.
   const TAB = String.fromCharCode(9), LF = String.fromCharCode(10), CR = String.fromCharCode(13);
   const policy = { allowHosts: ['app.example.com'] };
-  const mustBlock = [
-    exfil, '//evil.com/x', 'https://a@evil.com/x', 'https://app.example.com.evil.com/x',
-    'javascript:alert(1)', 'evil.com/path',
-    `/${TAB}/evil.com/steal`, `/${LF}/evil.com/steal`, `/${CR}/evil.com/steal`,
-  ];
+  const exfil = `https://attacker.io/?d=${encodeURIComponent(PII)}`;
+
+  // Probe the bypass CLASSES. It originally prefix-matched the raw string, so
+  // `/<TAB>/evil.com/steal` looked same-origin while a browser resolves it
+  // cross-origin — the URL parser removes TAB, LF and CR.
+  const mustBlock = [exfil, '//evil.com/x', 'https://a@evil.com/x', 'https://app.example.com.evil.com/x',
+    'javascript:alert(1)', 'data:text/html,x', 'evil.com/path',
+    `/${TAB}/evil.com/steal`, `/${LF}/evil.com/steal`, `/${CR}/evil.com/steal`];
   const mustPass = ['/careers', '#top', '?page=2', './x', 'https://app.example.com/ok'];
   const leaked = mustBlock.filter((u) => safeNavigate(u, policy) !== null);
   const broke = mustPass.filter((u) => safeNavigate(u, policy) === null);
+
   gate('G5p', 'safeNavigate() blocks every exfil class and passes legitimate targets',
     leaked.length === 0 && broke.length === 0,
-    `${leaked.length ? `not blocked: ${leaked.map((u) => JSON.stringify(u)).join(', ')}. ` : ''}` +
-    `${broke.length ? `wrongly blocked: ${broke.join(', ')}` : ''}`);
+    `${leaked.length ? `not blocked: ${leaked.map((u) => JSON.stringify(u)).join(', ')}. ` : ''}${broke.length ? `wrongly blocked: ${broke.join(', ')}` : ''}`);
+}
+
+// ── Wiring. A primitive nobody is forced to use is a library, not an invariant. ──
+// This is the half of every gate that the CTO named when rejecting the expression
+// evaluator from 0.8.0: "Bar 4 is satisfied only vacuously — zero call sites."
+{
+  const CORE = '/Users/noidme/atomkit/src';
+  const read = (f) => (existsSync(`${CORE}/${f}`) ? readFileSync(`${CORE}/${f}`, 'utf8') : '');
+  const SITES = ['render.tsx', 'data.tsx', 'atoms.tsx'];
+  const callers = (sym) => SITES.filter((f) => read(f).includes(sym));
+
+  const g2w = callers('evalInScope');
+  gate('G2w', 'the renderer evaluates expressions ONLY through evalInScope',
+    g2w.length > 0,
+    `no call site in [${SITES.join(', ')}]. The primitive is sound (G2/G2p) but nothing is forced to use it. ` +
+    'Closes when the runtime expression layer lands — in runtime AND compiler, one change.');
+
+  const g5w = callers('safeNavigate');
+  gate('G5w', 'every navigation path routes through safeNavigate',
+    g5w.length > 0,
+    `no call site in [${SITES.join(', ')}]. There is no action layer yet; safeHref still guards authored hrefs. ` +
+    'Closes when the action layer lands.');
 }
 
 // ── G6. The interpolation syntax must not silently swallow a value. ─────────
@@ -169,8 +196,8 @@ gate('G1', 'stripDocument masks PII before render',
 say(`\n  ${held} held · ${open} OPEN\n`);
 if (open && !quiet) {
   console.log('  AQL 1.0 interactivity is BLOCKED until every gate above is HELD.');
-  console.log('  Owners: aql-runtime-engineer (G2 — wire buildScope), aql-security-engineer (G5 — wire safeNavigate).');
-  console.log('  The PRIMITIVES (G2p/G5p) are sound. The GATES stay open until nothing can bypass them.\n');
+  console.log('  Owners: aql-runtime-engineer (G2w), aql-security-engineer (G5w).');
+  console.log('  The primitives are sound. The WIRING gates stay open until nothing can bypass them.\n');
 }
 if (quiet) console.log(JSON.stringify({ held, open, results: RESULTS }, null, 2));
 
