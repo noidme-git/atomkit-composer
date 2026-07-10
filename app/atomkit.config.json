@@ -20,5 +20,7 @@
   "data": {
     "allowHosts": []
   },
-  "outDir": "out"
+  "outDir": "out",
+  "appDir": ".",
+  "publicDir": "public"
 }

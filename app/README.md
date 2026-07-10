@@ -1,15 +1,33 @@
-# atomkit-composer
+# atomkit composer
 
 A visual composer for [atomkit](https://github.com/noidme-git/atomkit), **authored entirely in AQL**.
 
-No `.js`. No `.ts`. No `.css`. No `package.json`. No `node_modules`. The compiler transforms.
+This folder **is** the app, and it is self-contained: pages, config, assets, and docs all live here. No `.js`,
+no `.ts`, no `.css`, no `package.json`, no `node_modules`. The compiler transforms; the toolchain is external.
 
-```bash
-npx @noidmejs/atomkit-app dev      # http://localhost:3300
-npx @noidmejs/atomkit-app build    # → out/  (static HTML + React you own)
+```
+app/
+  index.aql              the composer
+  atomkit.config.json    tokens, governance context, routing
+  public/                static assets
+  docs/                  the decision log and specs
+  out/                   generated — HTML + React you own (gitignored)
 ```
 
-Everything generated lives in `out/`, which is gitignored. The repo is `app/*.aql`, a config file, and docs.
+The app carries no toolchain of its own. Build, dev, prod and test are owned by
+[`atomkit-release`](https://github.com/noidme-git/atomkit-release), so the tooling lives in one place instead of
+being copied into every app:
+
+```bash
+# from the atomkit-release repo:
+scripts/app.sh dev    ../atomkit-composer/app   # hot-reload dev server
+scripts/app.sh build  ../atomkit-composer/app   # → app/out
+scripts/app.sh prod   ../atomkit-composer/app   # serve the built site
+scripts/app.sh test   ../atomkit-composer/app   # build + assert it rendered
+```
+
+Everything generated lands in `out/`, which is gitignored. Under the hood it runs
+`npx @noidmejs/atomkit-app` — no local install.
 
 ## What runs today
 
