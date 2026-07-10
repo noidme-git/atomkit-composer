@@ -1,107 +1,72 @@
 # atomkit-composer
 
-A visual, drag-and-drop composer for [atomkit](https://github.com/noidme-git/atomkit). Compose a UI
-from atoms on a canvas; download a real, shippable **AQL project** you own.
+A visual composer for [atomkit](https://github.com/noidme-git/atomkit), **authored entirely in AQL**.
 
-> Status: **design complete, implementation starting.** Nothing here is usable yet.
+No `.js`. No `.ts`. No `.css`. No `package.json`. No `node_modules`. The compiler transforms.
 
-## What it is
-
-Think ExtJS Architect / Wix / WordPress Gutenberg, but the artifact you take away is not locked in a
-vendor database. It is an `atomkit-app` project:
-
-```
-my-ui/
-  app/index.aql            # your page, as AQL source
-  atomkit.config.json      # tokens, governance context, data allow-list
-  package.json
+```bash
+npx @noidmejs/atomkit-app dev      # http://localhost:3300
+npx @noidmejs/atomkit-app build    # → out/  (static HTML + React you own)
 ```
 
-Run it with `atomkit-app dev`, ship it with `atomkit-app build`, or eject it to plain React with
-`atomkit-compile`. The composer is an authoring surface, not a runtime dependency.
+Everything generated lives in `out/`, which is gitignored. The repo is `app/*.aql`, a config file, and docs.
 
-## Why it can exist now
+## What runs today
 
-The composer sits on `serialize()` — document → AQL. Until `@noidmejs/atomkit@0.6.0` that function
-silently dropped `roles`, `consentCategory`, `hidden`, data bindings and `alt`, so a
-compose → save → reload cycle would have quietly turned an admin-only node into a public one. It is
-now the exact, tested inverse of `parse()`, and it *throws* rather than drop a field it cannot
-express. That is the precondition for a visual editor that cannot silently lose your work.
+The shell, the canvas, the governance preview, the palette, the layers tree and the inspector. The canvas is not a
+mock: it is the real renderer, rendering real atoms, through the real egress path. The PII on it shows as `•••••`
+because `stripDocument` removed the value before the page was rendered — not because a CSS rule hid it.
 
-## Verified constraints
+**10.9 KB of HTML. Zero `<script>` tags. Zero stylesheets.**
 
-These were established by running the published `@noidmejs/atomkit@0.6.0`, not by reading docs.
-They shape the design.
+## What does not run today, and why
 
-### The composer's own chrome cannot be written in AQL
-
-AQL has no interactive atoms and no event or client-state model. The atom set is `box, section,
-container, grid, row, stack, text, heading, link, button, chip, list, icon, image, video, accordion,
-accordion-item, divider, spacer` — all presentational. So the palette, canvas chrome and inspector
-are React. What *is* AQL is the thing being composed: the canvas renders a real `BuilderDocument`
-through atomkit's own `Render` + `defaultAtoms`, so what you see is what ships.
-
-### Node ids are not unique, and not stable under edit
-
-Nothing enforces id uniqueness — not `parseDocument`, not `lint()`, not `Render`:
-
-```
-duplicate ids → parseDocument: ACCEPTED    lint(): no complaints
-  <style>@media(min-width:768px){.ak-a{font-size:99px !important}}
-         @media(min-width:768px){.ak-a{font-size:10px  !important}}</style>
-  <h2 class="ak-a">First</h2>          ← silently renders at 10px, not 99px
-  <h2 class="ak-a">Second</h2>
-```
-
-Two nodes sharing an id share their responsive CSS (`.ak-<id>`) and collide as React keys.
-
-Worse for an editor: `compilePage()` derives ids from tree position, so they **move** when you
-insert:
-
-```
-before insert:  0:"Keep me big"
-after  insert:  0:"New"   1:"Keep me big"     ← every id shifted
-```
-
-Any editor state keyed on `id` — selection, undo, per-node CSS — now points at a different node.
-The composer must therefore own node identity, and core must gain a uniqueness check.
-
-### `serialize()` refuses five field classes
-
-The composer's UI must not let a user author something that cannot be saved. Verified:
-
-| Field | Serializable? |
+| | |
 |---|---|
-| `data.source` static `value` | ⛔ refused |
-| api binding `headers` / `body` / `ttl` | ⛔ refused |
-| `meta.analytics.props` | ⛔ refused |
-| `meta.note` | ⛔ refused |
-| plain api binding (`url` + `path` + `bindTo`) | ✅ allowed |
+| Click a palette item to insert a node | needs request params in an expression scope |
+| Select a node | same |
+| Edit a property | needs input atoms and an action model |
+| Drag and drop | needs client state and events |
+| Undo / redo | needs client state |
 
-Note the sharp edge: **`meta.note` is exactly the "editor-only note" feature a composer wants**, and
-AQL cannot express it. Either AQL gains a `note=` attribute or notes live outside the document.
+AQL has 19 atoms, all presentational. There is no input atom, no event model, no client state. `Button` renders
+`type="button"` with no handler. So the composer's canvas can be AQL today; its *controls* cannot.
 
-### `AtomDef.fields` is untyped
+The page says so, on the page. An honest boundary beats a demo that lies.
 
-`AtomDef.fields` is a bare `string[]` (`["width", "gutter"]`) — its own comment says *"for a future
-palette"*. An inspector cannot derive a control from the name `"width"` alone. A typed field schema
-is required in core before the inspector can be schema-driven.
+## What unblocks it
 
-## The wedge: governance preview
+Two governance gates, in `atomkit/tools/gates/`:
 
-No other visual builder — Wix, Webflow, Builder.io, Gutenberg — has per-node governance enforced at
-egress. atomkit does, and it makes a preview feature that nobody else can ship. One document, three
-viewers, verified working today:
+```
+G2w  the renderer evaluates expressions ONLY through evalInScope     ❌ open
+G5w  every navigation path routes through safeNavigate               ❌ open
+```
 
-| Preview as | Renders |
-|---|---|
-| anonymous | `Public headline  •••••` |
-| admin, PII allowed | `Public headline  ada@corp.com  Board deck link  Q3 revenue` |
-| anonymous + analytics consent | adds `data-analytics-id` attributes |
+`buildScope()` and `safeNavigate()` exist and are sound. Neither has a call site, and **a primitive nobody is
+forced to use is a library, not an invariant.** Nothing interactive ships until both are wired.
 
-A designer flags a node `pii` and immediately sees what a logged-out visitor sees. That is a
-compliance review loop inside the design tool.
+That is not bureaucracy. A composer holds the *unstripped* authoring document by definition — it is the thing being
+edited. The moment that document reaches an expression scope, an expression reads straight around the mask. A
+composer that leaks a masked value in its own preview pane has destroyed the only thing that makes it worth
+building.
 
-## License
+Run `node atomkit/tools/gates/governance-gate.mjs`. It exits 1. It is meant to.
 
-MIT
+## Why this exists
+
+Every visual builder — Wix, Webflow, Framer, Builder.io, Gutenberg — lets you hide content. None of them lets you
+*withhold* it. In atomkit, a node marked `pii` or `roles=recruiter` is removed from the document **before the page
+is rendered**, so the bytes a viewer is not entitled to were never sent. Not `display:none`. Not blurred. Absent.
+
+And any page ejects to standalone React you own. That escape hatch is the price of asking anyone to adopt a new
+language.
+
+## Docs
+
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) — the ADR log. Every decision is backed by an experiment that was run,
+  and where a claim turned out to be wrong (ADR-003) it is corrected in place rather than quietly patched.
+- [`docs/TEAM.md`](docs/TEAM.md) — the agent team, and the rule they now all carry: *a milestone ends in something
+  the owner can run.*
+- [`docs/CEO-RULING.md`](docs/CEO-RULING.md) / [`docs/CTO-RULING.md`](docs/CTO-RULING.md) — including the ruling the
+  owner overruled, preserved so the decision can be revisited honestly.

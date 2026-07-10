@@ -1,0 +1,24 @@
+{
+  "title": "atomkit composer",
+  "description": "Compose governed UI in AQL. Download a project you own.",
+  "lang": "en",
+  "port": 3300,
+  "tokens": {
+    "ink": "#0b1220",
+    "muted": "#5b6472",
+    "line": "#e3e6ea",
+    "panel": "#f7f8fa",
+    "brand": "#2f6feb",
+    "warn": "#b45309"
+  },
+  "context": {
+    "canViewProtected": false,
+    "canViewPii": false,
+    "roles": [],
+    "analytics": false
+  },
+  "data": {
+    "allowHosts": []
+  },
+  "outDir": "out"
+}

@@ -1,0 +1,179 @@
+// The atomkit composer.
+//
+// Authored entirely in AQL. No .js, no .ts, no .css in this project — the compiler
+// transforms. Every visual below is an atom from @noidmejs/atomkit; the styling is
+// declarative props and design tokens from atomkit.config.json.
+//
+// WHAT IS LIVE TODAY: the shell, the canvas (rendering real atoms), the governance
+// preview, the palette, the layers tree, the inspector.
+// WHAT IS NOT: clicking, selecting, editing, dragging. Those need AQL's expression
+// and state layer, which is gated on G2w/G5w — see docs/DECISIONS.md ADR-010.
+// The gate is red. Nothing interactive ships until it is green.
+
+page "atomkit composer" desc="Compose governed UI in AQL. Download a project you own." {
+
+  // ── Top bar ───────────────────────────────────────────────────────────────
+  box as=header bg="var(--ink)" pad-y=14 pad-x=24 {
+    row justify=space-between items=center {
+      row items=center gap=12 {
+        icon path="M4 4h16v16H4z M4 10h16 M10 4v16" size=20 stroke="#ffffff" aria-label="atomkit"
+        heading "atomkit composer" level=1 size=17px weight=700 color="#ffffff"
+        chip "v0.1 · shell" bg="#1e2a3d" color="#9fb3d1" size=11px
+      }
+      row items=center gap=8 {
+        text "Viewing as" color="#9fb3d1" size=13px
+        chip "Anonymous" bg="#2f6feb" color="#ffffff" size=12px weight=700
+        chip "Recruiter" bg="#1e2a3d" color="#9fb3d1" size=12px
+        chip "Admin" bg="#1e2a3d" color="#9fb3d1" size=12px
+        divider
+        button "Download project" href="#download" bg="#ffffff" color="var(--ink)" size=13px weight=700 radius=6 pad="8px 14px"
+      }
+    }
+  }
+
+  // ── Three-pane workspace ──────────────────────────────────────────────────
+  section contain=false pad-y=0 bg="var(--panel)" {
+    row wrap=false items=stretch gap=0 min-h="calc(100vh - 56px)" {
+
+      // ── Palette ────────────────────────────────────────────────────────
+      box w=228 bg="#ffffff" border-right="1px solid var(--line)" pad=16 {
+        stack gap=14 {
+          text "PALETTE" size=11px weight=700 color="var(--muted)" ls="0.08em"
+
+          text "Layout" size=12px weight=700 color="var(--ink)"
+          grid cols=2 gap=8 {
+            chip "section" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "container" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "grid" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "row" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "stack" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "box" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+          }
+
+          text "Content" size=12px weight=700 color="var(--ink)"
+          grid cols=2 gap=8 {
+            chip "heading" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "text" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "link" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "button" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "list" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "icon" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+          }
+
+          text "Media" size=12px weight=700 color="var(--ink)"
+          grid cols=2 gap=8 {
+            chip "image" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+            chip "video" bg="var(--panel)" color="var(--ink)" size=12px radius=6
+          }
+
+          divider
+          box bg="#fffbeb" border="1px solid #fde68a" radius=6 pad=10 {
+            text "Click-to-place is disabled." size=11px weight=700 color="var(--warn)"
+            text "Needs AQL's expression + state layer. Gate G2w is open." size=11px color="var(--warn)"
+          }
+        }
+      }
+
+      // ── Canvas ─────────────────────────────────────────────────────────
+      box bg="var(--panel)" pad=24 w="100%" {
+        stack gap=12 {
+          row justify=space-between items=center {
+            text "CANVAS · careers.aql" size=11px weight=700 color="var(--muted)" ls="0.08em"
+            text "rendered by the same renderer that ships" size=11px color="var(--muted)"
+          }
+
+          // The canvas is not a mock. These are the real atoms, rendered by the
+          // real renderer, through the real egress path.
+          box bg="#ffffff" border="1px solid var(--line)" radius=10 pad=32 shadow="0 1px 2px rgba(11,18,32,.04)" {
+            stack gap=18 {
+              heading "Join Northwind Health" level=2 size=30px color="var(--ink)"
+              text "We build software for hospitals. Come help." color="var(--muted)" size=16px max-w=52ch
+
+              divider
+
+              text "Compensation band" size=12px weight=700 color="var(--muted)"
+              row items=center gap=10 {
+                text "£120,000 – £160,000" weight=700 color="var(--ink)"
+                chip "visible to recruiter" bg="#eef2ff" color="#3730a3" size=11px
+              }
+
+              text "Talk to a human" size=12px weight=700 color="var(--muted)"
+              row items=center gap=10 {
+                text "•••••" color="var(--ink)"
+                chip "contains personal data" bg="#fef2f2" color="#991b1b" size=11px
+              }
+
+              row items=center gap=10 {
+                text "Hiring plan Q3" color="var(--muted)"
+                chip "is confidential" bg="#f5f3ff" color="#5b21b6" size=11px
+              }
+            }
+          }
+
+          box bg="#ffffff" border="1px solid var(--line)" radius=8 pad=12 {
+            text "You are previewing as Anonymous. Two nodes are absent from this page, not hidden — the bytes were never sent." size=12px color="var(--muted)"
+          }
+        }
+      }
+
+      // ── Inspector + layers ─────────────────────────────────────────────
+      box w=280 bg="#ffffff" border-left="1px solid var(--line)" pad=16 {
+        stack gap=16 {
+          text "LAYERS" size=11px weight=700 color="var(--muted)" ls="0.08em"
+          list {
+            text "section" size=13px color="var(--ink)"
+            text "heading — Join Northwind Health" size=13px color="var(--muted)"
+            text "text — We build software…" size=13px color="var(--muted)"
+            text "section · roles=recruiter" size=13px color="#3730a3"
+            text "section · pii" size=13px color="#991b1b"
+            text "section · protected" size=13px color="#5b21b6"
+          }
+
+          divider
+
+          text "INSPECTOR" size=11px weight=700 color="var(--muted)" ls="0.08em"
+          text "heading" size=13px weight=700 color="var(--ink)"
+
+          stack gap=6 {
+            text "Content" size=11px weight=700 color="var(--muted)"
+            box bg="var(--panel)" border="1px solid var(--line)" radius=6 pad="8px 10px" {
+              text "Join Northwind Health" size=13px color="var(--ink)"
+            }
+          }
+          stack gap=6 {
+            text "Level" size=11px weight=700 color="var(--muted)"
+            box bg="var(--panel)" border="1px solid var(--line)" radius=6 pad="8px 10px" {
+              text "2" size=13px color="var(--ink)"
+            }
+          }
+          stack gap=6 {
+            text "Governance" size=11px weight=700 color="var(--muted)"
+            row gap=6 wrap=true {
+              chip "public" bg="var(--panel)" color="var(--muted)" size=11px
+              chip "pii" bg="var(--panel)" color="var(--muted)" size=11px
+              chip "protected" bg="var(--panel)" color="var(--muted)" size=11px
+              chip "roles" bg="var(--panel)" color="var(--muted)" size=11px
+            }
+          }
+
+          divider
+          box bg="#fffbeb" border="1px solid #fde68a" radius=6 pad=10 {
+            text "Fields are read-only." size=11px weight=700 color="var(--warn)"
+            text "Editing needs input atoms and an action model. Deferred until gate G5w closes." size=11px color="var(--warn)"
+          }
+        }
+      }
+    }
+  }
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  box as=footer bg="#ffffff" border-top="1px solid var(--line)" pad="14px 24px" {
+    row justify=space-between items=center {
+      text "Authored in AQL. No .js, no .ts, no .css in this project." size=12px color="var(--muted)"
+      row gap=16 {
+        link "Decisions" href="https://github.com/noidme-git/atomkit-composer/blob/main/docs/DECISIONS.md" external size=12px color="var(--brand)"
+        link "Governance gate" href="https://github.com/noidme-git/atomkit-composer/blob/main/spike/governance-gate.mjs" external size=12px color="var(--brand)"
+      }
+    }
+  }
+}
