@@ -35,12 +35,16 @@ const PII = 'SSN 123-45-6789';
 const piiDoc = { version: 1, root: [{ id: 'a', type: 'text', props: { text: PII }, meta: { security: { pii: true } } }] };
 
 let held = 0, open = 0;
+export const RESULTS = [];
+const quiet = process.argv.includes('--json');
+const say = (...a) => { if (!quiet) console.log(...a); };
 const gate = (id, invariant, ok, detail) => {
-  if (ok) { held++; console.log(`  ✅ HELD  ${id}  ${invariant}`); }
-  else { open++; console.log(`  ❌ OPEN  ${id}  ${invariant}\n           → ${detail}`); }
+  RESULTS.push({ id, invariant, status: ok ? 'HELD' : 'OPEN' });
+  if (ok) { held++; say(`  ✅ HELD  ${id}  ${invariant}`); }
+  else { open++; say(`  ❌ OPEN  ${id}  ${invariant}\n           → ${detail}`); }
 };
 
-console.log('\n══ Governance gate for AQL 1.0 ══\n');
+say('\n══ Governance gate for AQL 1.0 ══\n');
 
 // ── G1. The render path masks. This is the guarantee the product is sold on. ──
 gate('G1', 'stripDocument masks PII before render',
@@ -49,21 +53,36 @@ gate('G1', 'stripDocument masks PII before render',
 
 // ── G2. An expression must not read a masked value through STATE. ────────────
 // The mask is destructive, so it holds — but ONLY if the scope holds the stripped
-// document. An editor holds the authoring (unstripped) document by definition.
-// Any `render-document document={{state.doc}}` puts it in an expression scope.
-// FIX (strip-before-scope): the scope is built ONLY by `buildScope`, which strips
-// every document with the render ctx before it can be read; the canvas renders the
-// authoring doc through a SEPARATE documents channel (see g2-strip-before-scope.mjs),
-// never through an expression. Proof: spike/g2-strip-before-scope.mjs.
+// document. An editor holds the AUTHORING document by definition.
+//
+// G2 asks about the SYSTEM: can a renderer construct a raw scope and read PII?
+// Today: yes, because nothing forces it through buildScope. `buildScope` exists and
+// is sound (G2p), but a primitive with no call site is a library, not an invariant.
+// See spike/gate-wiring.mjs. This stays OPEN until the runtime cannot bypass it.
 {
-  const raw = evalExpr('state.doc.root[0].props.text', { state: { doc: piiDoc } });     // the hole
-  const scope = buildScope({ state: { doc: piiDoc } }, { canViewPii: false });           // the fix
-  const leaked = evalExpr('state.doc.root[0].props.text', scope);
-  gate('G2', 'an expression cannot read PII held in state',
-    leaked !== PII,
-    `evalExpr over a buildScope() scope still returned ${JSON.stringify(leaked)} — bypass survives.`);
-  console.log(`           strip-before-scope: raw scope reads ${JSON.stringify(raw)}; ` +
-    `buildScope reads ${JSON.stringify(leaked)} (the mask).`);
+  const raw = evalExpr('state.doc.root[0].props.text', { state: { doc: piiDoc } });
+  gate('G2', 'the system cannot construct a scope that reads PII',
+    raw !== PII,
+    `evalExpr over a hand-built scope returned ${JSON.stringify(raw)}. ` +
+    'buildScope() would have masked it, but nothing forces the renderer to use it. ' +
+    'FIX: the runtime must build EVERY expression scope via buildScope, and `state` must be literal-only.');
+
+  // G2p — is the primitive itself sound? Probe the shape classes, not one input.
+  // `buildScope` originally masked only `{version:number, root:array}`, so a SELECTED
+  // NODE — what an inspector holds — read raw PII. Found by the CTO gate.
+  const piiNode = piiDoc.root[0];
+  const shapes = [
+    ['document', { state: { doc: piiDoc } }],
+    ['selected node', { state: { node: piiNode } }],
+    ['array of nodes', { state: { nodes: [piiNode] } }],
+    ['string version', { state: { doc: { version: '1', root: [piiNode] } } }],
+    ['deeply nested', { state: { a: { b: { c: piiNode } } } }],
+    ['loop variable', { item: piiNode }],
+  ];
+  const leaky = shapes.filter(([, sc]) => JSON.stringify(buildScope(sc, { canViewPii: false })).includes(PII)).map(([n]) => n);
+  gate('G2p', 'buildScope() masks every governed shape, not just a document',
+    leaky.length === 0,
+    `leaks for: ${leaky.join(', ')}`);
 }
 
 // ── G3. maskNode must fail closed on node-level fields. ─────────────────────
@@ -85,19 +104,34 @@ gate('G1', 'stripDocument masks PII before render',
 }
 
 // ── G5. A navigate action must not exfiltrate. ──────────────────────────────
-// safeHref blocks SCHEMES (javascript:, data:, //host), never DESTINATIONS — an
-// https exfil URL passes it unchanged. FIX: `navigate` routes through `safeNavigate`,
-// which enforces the DESTINATION host against an allow-list (the SAME list
-// atomkit-http uses for `call`). Same-origin (relative/query/fragment) stays allowed.
-// Proof: spike/g5-safe-navigate.mjs.
+// safeHref blocks SCHEMES (javascript:, data:, //host), never DESTINATIONS.
+//
+// G5 asks about the SYSTEM: is the default URL guard sufficient? No. `safeNavigate`
+// exists and is sound (G5p), but no atom, renderer or action calls it. OPEN.
 {
   const exfil = `https://attacker.io/?d=${encodeURIComponent(PII)}`;
-  const policy = { allowHosts: ['app.example.com'] }; // the host app's own origin
-  gate('G5', 'a navigate target cannot carry data to an arbitrary host',
-    safeNavigate(exfil, policy) === null,
-    `safeNavigate returned ${JSON.stringify(safeNavigate(exfil, policy))} — exfil not blocked.`);
-  console.log(`           safeHref(exfil) = ${JSON.stringify(safeHref(exfil))} (passes); ` +
-    `safeNavigate(exfil, allowHosts) = ${JSON.stringify(safeNavigate(exfil, policy))} (blocked).`);
+  gate('G5', 'the system cannot navigate data to an arbitrary host',
+    safeHref(exfil) === '#',
+    `safeHref passed ${JSON.stringify(safeHref(exfil))} unchanged — it blocks schemes, not destinations. ` +
+    'safeNavigate() would block it, but nothing calls it. FIX: route every navigate/call through it.');
+
+  // G5p — is the primitive sound? Probe the bypass CLASSES.
+  // It originally prefix-matched the raw string, so `/<TAB>/evil.com/steal` looked
+  // same-origin while a browser resolves it to https://evil.com/steal.
+  const TAB = String.fromCharCode(9), LF = String.fromCharCode(10), CR = String.fromCharCode(13);
+  const policy = { allowHosts: ['app.example.com'] };
+  const mustBlock = [
+    exfil, '//evil.com/x', 'https://a@evil.com/x', 'https://app.example.com.evil.com/x',
+    'javascript:alert(1)', 'evil.com/path',
+    `/${TAB}/evil.com/steal`, `/${LF}/evil.com/steal`, `/${CR}/evil.com/steal`,
+  ];
+  const mustPass = ['/careers', '#top', '?page=2', './x', 'https://app.example.com/ok'];
+  const leaked = mustBlock.filter((u) => safeNavigate(u, policy) !== null);
+  const broke = mustPass.filter((u) => safeNavigate(u, policy) === null);
+  gate('G5p', 'safeNavigate() blocks every exfil class and passes legitimate targets',
+    leaked.length === 0 && broke.length === 0,
+    `${leaked.length ? `not blocked: ${leaked.map((u) => JSON.stringify(u)).join(', ')}. ` : ''}` +
+    `${broke.length ? `wrongly blocked: ${broke.join(', ')}` : ''}`);
 }
 
 // ── G6. The interpolation syntax must not silently swallow a value. ─────────
@@ -127,15 +161,19 @@ gate('G1', 'stripDocument masks PII before render',
   gate('G7', 'expression roots are constrained by the host, not the grammar',
     anyRoot === 42,
     'informational');
-  console.log('           note: parseExpr has no root allowlist. That is BY DESIGN — the scope is the');
-  console.log('           boundary. Any design whose safety proof relies on a grammar-level root');
-  console.log('           restriction is relying on something that does not exist.');
+  say('           note: parseExpr has no root allowlist. That is BY DESIGN — the scope is the');
+  say('           boundary. Any design whose safety proof relies on a grammar-level root');
+  say('           restriction is relying on something that does not exist.');
 }
 
-console.log(`\n  ${held} held · ${open} OPEN\n`);
-if (open) {
+say(`\n  ${held} held · ${open} OPEN\n`);
+if (open && !quiet) {
   console.log('  AQL 1.0 interactivity is BLOCKED until every gate above is HELD.');
-  console.log('  Owners: aql-security-engineer (G2,G4,G5), aql-runtime-engineer (G2,G3),');
-  console.log('          aql-language-designer (G6).\n');
+  console.log('  Owners: aql-runtime-engineer (G2 — wire buildScope), aql-security-engineer (G5 — wire safeNavigate).');
+  console.log('  The PRIMITIVES (G2p/G5p) are sound. The GATES stay open until nothing can bypass them.\n');
 }
-process.exit(open ? 1 : 0);
+if (quiet) console.log(JSON.stringify({ held, open, results: RESULTS }, null, 2));
+
+// Exit 1 while any gate is open. `gate-ratchet.mjs` is what CI runs: a permanently
+// red build is noise, but a gate that silently REOPENS is a catastrophe.
+if (process.argv[1]?.endsWith('governance-gate.mjs')) process.exit(open ? 1 : 0);

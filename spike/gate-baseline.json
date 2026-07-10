@@ -1,0 +1,14 @@
+{
+  "gates": {
+    "G1": "HELD",
+    "G2": "OPEN",
+    "G2p": "HELD",
+    "G3": "HELD",
+    "G4": "HELD",
+    "G5": "OPEN",
+    "G5p": "HELD",
+    "G6": "HELD",
+    "G6b": "HELD",
+    "G7": "HELD"
+  }
+}
