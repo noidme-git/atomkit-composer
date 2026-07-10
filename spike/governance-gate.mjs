@@ -14,7 +14,12 @@
 // Each check states the invariant, then the attack. A check that passes today is
 // marked HELD. A check that fails is a precondition for AQL 1.0.
 
-import { stripDocument, evalExpr, safeHref, maskNode, parse } from '@noidmejs/atomkit';
+import { stripDocument, safeHref, maskNode, parse } from '@noidmejs/atomkit';
+// The evaluator is deliberately NOT part of the published surface until it has a
+// call site and a settled contract (CTO ruling on the 0.8.0 candidate). The gate
+// reaches the module directly, because the gate's whole job is to test what is not
+// yet safe to expose.
+import { evalExpr } from './node_modules/@noidmejs/atomkit/dist/expr.js';
 
 const PII = 'SSN 123-45-6789';
 const piiDoc = { version: 1, root: [{ id: 'a', type: 'text', props: { text: PII }, meta: { security: { pii: true } } }] };
