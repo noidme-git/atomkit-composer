@@ -1,5 +1,8 @@
 # The atomkit-composer team
 
+> This is the engineering/product team. For the **full company org** — executive, marketing,
+> sales, legal, finance, ops — see [ORG.md](ORG.md).
+
 A standing team of specialist agents. Each is a real definition in `~/.claude/agents/<name>.md`, invocable by
 name, sharing one grounding contract: **verify by executing, cite `file:line`, never publish, never guess.**
 
