@@ -1,99 +1,106 @@
 # The atomkit company
 
-A full agentic org — 37 specialist agents across engineering, product, go-to-market and control functions. Each is
-a real definition in `~/.claude/agents/`, invocable by name, carrying one shared contract: **verify, never
-fabricate; a deliverable is a thing someone can use; serve the wedge; disagree in writing.**
+38 specialist agents across engineering, product, go-to-market and control functions. Each is a real definition in
+`~/.claude/agents/`, and — as of the org review — **every reporting line below exists in the actual charter**,
+verifiable by grep. The earlier version of this file asserted an org chart the charters did not contain; that was
+the company's own firing offense (claiming the unverified), and it is fixed.
 
-The wedge, stated once: atomkit builds *governed-by-construction* UI. A block marked `pii` / `roles` / `protected`
-/ `consent` is **removed before the page renders** — the bytes a viewer isn't entitled to were never sent. No
-visual builder does this. The whole company exists to get that in front of a paying, compliance-driven buyer.
+The wedge, once: atomkit builds *governed-by-construction* UI. A `pii`/`roles`/`protected`/`consent` node is
+**removed before the page renders** — the bytes a viewer isn't entitled to were never sent. No visual builder does
+this. The whole company exists to get that in front of a paying, compliance-driven buyer.
 
 ---
 
-## Org chart
+## Org chart (matches the charters)
 
 ```
-                                   ┌────────────┐
-                                   │    CEO     │   outcome · ship/pivot/kill · the customer
-                                   └─────┬──────┘
-        ┌───────────────┬───────────────┼───────────────┬───────────────┬──────────────┐
-        │               │               │               │               │              │
-   ┌────┴────┐    ┌─────┴─────┐   ┌─────┴─────┐   ┌─────┴─────┐   ┌─────┴─────┐   ┌────┴─────┐
-   │   CTO   │    │    CMO    │   │    CRO    │   │    CFO    │   │    COO    │   │ Gen.     │
-   │ tech +  │    │ marketing │   │ revenue   │   │ finance   │   │ ops +     │   │ Counsel  │
-   │ quality │    │ + brand   │   │ + sales   │   │ + raise   │   │ people    │   │ legal    │
-   └────┬────┘    └─────┬─────┘   └─────┬─────┘   └─────┬─────┘   └─────┬─────┘   └────┬─────┘
-        │               │               │               │               │              │
-  Engineering     Marketing        Sales & BD        Finance      Ops/People/Data    Legal
+                                        CEO
+        ┌──────────┬──────────┬──────────┼──────────┬──────────────┐
+       CTO        CMO        CRO        CFO        COO       General Counsel
+        │
+        ├── aql-security-engineer         (direct — audits the platform, must be independent)
+        ├── composer-test-engineer        (direct — independent QA, must not report to who it red-teams)
+        │
+        ├── Head of Language & Platform
+        │      ├── aql-language-designer      ├── aql-syntax-designer
+        │      ├── aql-runtime-engineer       ├── aql-ai-engineer
+        │      ├── aql-compiler-engineer      └── core-atom-engineer  ⭐ NEW — the unblocking hire
+        │
+        └── Head of Composer  (composer-tech-lead, now a manager, not a tiebreaker)
+               ├── composer-atom-designer        ├── composer-ux-designer
+               ├── composer-molecule-architect   ├── composer-a11y-guardian (keeps keyboard veto)
+               ├── composer-template-builder     ├── composer-interaction-engineer (sole DnD owner)
+               └── composer-devrel (dotted → content-brand/CMO for public editorial)
 ```
 
-### Executive (7) — decision authority, model: opus
-| Agent | Owns | Ruling verbs |
+| Executive | Reports | Function |
 |---|---|---|
-| `ceo-agent` | Outcome, customer, commercial case | ship · iterate · pivot · kill |
-| `cto-agent` | Tech strategy, architecture, quality + security bar | approve · rework · reject |
-| `cmo-agent` | Positioning, brand, narrative, demand | launch · sharpen · hold |
-| `cro-agent` | Revenue motion, pipeline, pricing, partnerships | pursue · qualify-out · rework |
-| `cfo-agent` | Model, runway, unit economics, the raise | fund · hold · cut |
-| `coo-agent` | Operations, people, execution cadence | ship · sequence · stop |
-| `general-counsel` | Legal, compliance, IP, regulatory | clear · condition · block (veto) |
+| **CTO** | Head of L&P · Head of Composer · aql-security-engineer · composer-test-engineer | Engineering (17) |
+| **CMO** | product-marketing · content-brand · growth-demand¹ · brand-designer¹ | Marketing (4) |
+| **CRO** | sales-lead · solutions-engineer · partnerships-lead | Revenue (3) |
+| **CFO** | fundraising-lead¹ | Finance (1) |
+| **COO** | talent-lead · revops-lead · data-analytics-lead¹ · customer-success-lead | Ops/People/Data (4) |
+| **General Counsel** | privacy-counsel · commercial-counsel¹ | Legal (2) |
 
-### Engineering — under the CTO (15)
-**Language & runtime (6):** `aql-language-designer` · `aql-runtime-engineer` · `aql-compiler-engineer` ·
-`aql-security-engineer` · `aql-syntax-designer` · `aql-ai-engineer`
-
-**Composer / product (9):** `composer-tech-lead` · `composer-atom-designer` · `composer-molecule-architect` ·
-`composer-template-builder` · `composer-interaction-engineer` · `composer-ux-designer` · `composer-a11y-guardian` ·
-`composer-test-engineer` · `composer-devrel`
-
-### Marketing — under the CMO (4 + strategist)
-`product-marketing-lead` · `content-brand-lead` · `growth-demand-lead` · `brand-designer` ·
-`composer-business-strategist` (founding strategist, dotted line to CEO)
-
-### Sales & Partnerships — under the CRO (3)
-`sales-lead` · `solutions-engineer` (technical pre-sales) · `partnerships-lead`
-
-### Legal & Compliance — under the General Counsel (2)
-`privacy-counsel` (GDPR/DPDP/CCPA — the product *is* a privacy control, so this is strategic) · `commercial-counsel`
-(MSAs, DPAs, the MIT-vs-commercial licensing posture, IP)
-
-### Finance — under the CFO (1)
-`fundraising-lead` (narrative, deck, data room, diligence)
-
-### Ops / People / Data / Customer — under the COO (4)
-`talent-lead` · `revops-lead` · `data-analytics-lead` · `customer-success-lead`
+¹ **dormant / fractional** until a validated buyer justifies the spend (see below).
 
 ---
 
-## How the company works
+## What the org review changed (2026-07-11)
 
-- **Agents run as workflows, not chat.** The proven shape: a lead sets the charter → specialists work in parallel
-  (they can't see each other, which is the point) → `composer-test-engineer` red-teams every claim by execution →
-  an executive rules and records it.
-- **Design is parallel; integration is not.** Two agents never own the same file or the same decision.
-- **The executives decide; they do not average.** When two agents disagree, the relevant C-level rules and says why.
-- **Everything is recorded.** `docs/DECISIONS.md` is the ADR log. The CEO's overruled pivot is in it on purpose —
-  a decision whose counter-argument isn't written down can't be revisited honestly.
+Five reviews — talent, COO, CTO, CMO, and an adversarial pre-mortem — reached one verdict: **fixable, not great,
+one re-wire from repeating the failure.** Full detail in [ORG-REVIEW.md](ORG-REVIEW.md). Applied:
 
-## The standing rule, for every function
+1. **Engineering is wired into the company and layered.** The CTO now reports to the CEO (it reported to no one).
+   The 15 flat engineers now sit under two real managers — **Head of Language & Platform** and **Head of
+   Composer** — with `aql-security-engineer` and `composer-test-engineer` reporting to the CTO directly so QA and
+   security stay independent of what they review. *This was the single highest-leverage change: it repaired the
+   orphan CTO, all 17 orphans, and the 15-wide flat span at once, and installed the manager accountable for
+   whether a thing shipped — the documented root of the "15 docs, 14 spikes, zero code" near-death.*
+2. **`core-atom-engineer` created** — the interactive + editor-primitive atoms the whole pure-AQL mandate is
+   blocked on had no owner. Now they do.
+3. **`composer-business-strategist` retired** — a redundant orphan duplicating the CMO, CRO and product-marketing.
+4. **The strategic contradiction is resolved.** The company had been briefed two ways (build pure-AQL vs. pure-AQL
+   is a losing bet). One reconciled directive now runs in every charter — see below.
 
-This company's scar is *claiming what wasn't true* — docs that promised what the code didn't do, a security gate
-that reported a false green, a UI shipped without anyone looking at it. So:
+## The one strategy (in every charter — pending owner ratification)
 
-> **No agent asserts what it has not verified.** An engineer verifies by executing. A marketer, lawyer, or CFO
-> verifies by citing a source. A finding, a stat, a legal conclusion, or a design without a check behind it is an
-> opinion — and a *confident* one is the single firing offense.
+> The **wedge ships now** on the 19 presentational atoms. **Pure-AQL stands** as the platform bet the owner chose.
+> **Interactivity is gated on demand** — no interactive feature ships to customers until a named regulated buyer
+> has reacted to the governance demo. Go-to-market gets the demo in front of the buyer; engineering ships the
+> wedge and builds the interactive layer behind the gate, ready the moment demand is proven.
 
-## Hiring
+Nobody is told to stop building; nobody is told to build ahead of demand. This is the reconciliation the CEO and
+the composer tech lead independently reached. **The owner must ratify it or replace it — it is the single most
+important open decision in the company.**
 
-Hire when a **function has no owner** or a **decision has no expert** — not when work is merely large. Copy the
-frontmatter + grounding + company-context blocks from any existing agent, give the role one sentence of purpose and
-its standing questions, place it under the right executive, and add it to this chart. Grant `Bash` only to roles
-that verify by running things; grant `Write`/`Edit` only to roles that own artifacts.
+## Decision rights (the CEO must ratify)
 
-## The honest footer
+1. **One DRI per decision** — exactly one accountable owner, never a committee.
+2. **Default open** — ship unless a *named* gate is red. You may not block outside your own gate.
+3. **One arbitration forum** — cross-boundary ties (eng vs go-to-market) resolve at the CEO, CTO present, in a
+   **weekly ship review**. The COO owns that cadence and the single decision log.
+4. **Settled stays settled** — the pure-AQL mandate is not re-argued; dissent is recorded, not relitigated.
+5. **A demand gate with the weight of the security gate** — no interactivity ships until a real buyer has reacted.
 
-The engineering is real and unusually solid. The business is unproven — zero users, zero revenue, no validated
-demand. This org exists so that every function drives toward the one thing that decides whether the idea works:
-a compliance-driven buyer, in the room, watching governed data physically disappear. Building more is not the
-answer to that question. A customer is.
+## Dormant until a customer justifies them
+
+The company is ~40% engineering for zero revenue; the go-to-market half over-builds for a product no buyer has
+seen. These stay dormant/fractional, and their headcount is redeployed to the demo and buyer-sourcing:
+`growth-demand-lead` (keep a fractional "one channel" slice), `brand-designer` (landing page + deck only),
+`data-analytics-lead` (fold under revops for now), `fundraising-lead` (data room warm, not raising),
+`commercial-counsel` (on-demand). **Kept active:** `privacy-counsel` — the DPIA/GDPR mapping *is* a sales asset.
+
+## Still-open gaps (owners assigned, work not done)
+
+- **Product management** — one owner turning buyers into a backlog (today a committee). Deferred hire.
+- **SOC 2 / trust posture + the security-questionnaire package** — the document that closes a compliance sale is
+  produced ad-hoc across two silos. → General Counsel (readiness) + solutions-engineer (package).
+- **Pricing DESIGN** — execution is owned, tier design is not. → product-marketing designs, CFO gates, CRO executes.
+- **Per-persona eject** working group → Head of Language & Platform.
+
+## The standing rule
+
+> **No agent asserts what it has not verified.** An engineer verifies by executing; a marketer, lawyer or CFO by
+> citing a source. This file itself broke that rule once and was corrected. A confident fabrication — an invented
+> stat, an unbacked reporting line, a claim the code doesn't deliver — is the single firing offense.
